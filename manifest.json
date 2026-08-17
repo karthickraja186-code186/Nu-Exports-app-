@@ -1,0 +1,9 @@
+{
+  "name":"NU Exports Transport Management",
+  "short_name":"NU Exports",
+  "start_url":"./index.html",
+  "display":"standalone",
+  "background_color":"#f5f7fa",
+  "theme_color":"#0877bd",
+  "icons":[]
+}

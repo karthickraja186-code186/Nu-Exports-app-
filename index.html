@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0877bd">
+<link rel="manifest" href="manifest.json">
+<title>NU Exports - Transport Management</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#f5f7fa;color:#172033;font-family:Georgia,"Times New Roman",serif}
+.wrap{max-width:1100px;margin:auto;padding:18px}.hero{background:linear-gradient(135deg,#075aa8,#08a1d1);color:white;border-radius:14px;padding:25px 28px;box-shadow:0 4px 12px #0002}
+.hero h1{margin:0 0 8px;font-size:28px}.hero p{margin:0;font-weight:bold;opacity:.9}
+.card{background:white;border:1px solid #d8dee7;border-radius:14px;margin-top:22px;padding:24px;box-shadow:0 2px 7px #0001}
+h2{color:#31547c;font-size:21px;margin:0 0 16px;border-bottom:2px solid #e1e6ec;padding-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-weight:bold;margin-bottom:7px;color:#293548}
+input,select{width:100%;padding:13px;border:1px solid #ccd3dc;border-radius:8px;background:#fff;font:inherit;font-weight:bold}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}.btn{border:0;border-radius:8px;padding:13px;color:white;font:inherit;font-weight:bold;cursor:pointer}.save{background:#00b84f}.update{background:#087bb9}.clear{background:#6c757d}.delete{background:#d93434}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}.stat{padding:16px 18px;background:#eef3fb;border-left:4px solid #0aa1cc;border-radius:8px}.stat.pending{border-left-color:#e58b00}.stat b{display:block;font-size:24px;margin-top:5px}
+.tablebox{overflow-x:auto;border:1px solid #d7dde5;border-radius:9px}table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:12px;border-bottom:1px solid #e0e4e9;text-align:left;white-space:nowrap}th{background:#f1f5fa;color:#243a56}tr:hover{background:#f7fbff}.actions button{margin-right:4px;padding:6px 9px;border:0;border-radius:6px;color:#fff;cursor:pointer}.edit{background:#087bb9}.del{background:#d93434}.empty{text-align:center;padding:25px;color:#777}
+@media(max-width:650px){.wrap{padding:12px}.hero{padding:21px}.hero h1{font-size:24px}.card{padding:16px}.grid{grid-template-columns:1fr}.full{grid-column:auto}.buttons{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr 1fr}input,select{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <h1>Transport & Parcel<br>Management System</h1>
+    <p>NU Exports • Manage LR entries, freight calculations, and parcel deliveries.</p>
+  </section>
+
+  <section class="card">
+    <h2>Parcel Details Entry</h2>
+    <div class="grid">
+      <div><label>LR Number *</label><input id="lr" placeholder="e.g. LR-10025"></div>
+      <div><label>Transport Name *</label><input id="transport" placeholder="e.g. VRL Logistics"></div>
+      <div><label>Number of Articles *</label><input id="articles" type="number" min="1" placeholder="e.g. 5"></div>
+      <div><label>Freight Amount (₹)</label><input id="freight" type="number" min="0" value="0"></div>
+      <div><label>Local Freight (₹)</label><input id="local" type="number" min="0" value="0"></div>
+      <div><label>Booking Date *</label><input id="booking" type="date"></div>
+      <div><label>Delivery Date</label><input id="delivery" type="date"></div>
+      <div><label>Status</label>
+        <select id="status"><option>Pending</option><option>In Transit</option><option>Delivered</option><option>Cancelled</option></select>
+      </div>
+    </div>
+    <div class="buttons">
+      <button class="btn save" onclick="saveLR()">Save</button>
+      <button class="btn update" onclick="updateLR()">Update LR</button>
+      <button class="btn clear" onclick="clearForm()">Clear</button>
+      <button class="btn delete" onclick="deleteCurrent()">Delete</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Pending & Active Parcel List</h2>
+    <div class="stats">
+      <div class="stat">TOTAL PARCELS<b id="total">0</b></div>
+      <div class="stat pending">PENDING PARCELS<b id="pendingCount">0</b></div>
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>LR Number</th><th>Transport Name</th><th>Articles</th><th>Freight (₹)</th><th>Local Freight (₹)</th><th>Total (₹)</th><th>Booking</th><th>Delivery</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("nu_exports_parcels") || "[]");
+let editingLR = null;
+const $ = id => document.getElementById(id);
+function today(){ return new Date().toISOString().slice(0,10); }
+$("booking").value = today();
+
+function values(){
+  return {
+    lr:$("lr").value.trim(), transport:$("transport").value.trim(),
+    articles:Number($("articles").value||0), freight:Number($("freight").value||0),
+    local:Number($("local").value||0), booking:$("booking").value,
+    delivery:$("delivery").value, status:$("status").value
+  };
+}
+function save(){localStorage.setItem("nu_exports_parcels",JSON.stringify(data));render();}
+function saveLR(){
+  const v=values();
+  if(!v.lr || !v.transport || !v.articles || !v.booking){alert("Please fill LR Number, Transport Name, Articles and Booking Date.");return;}
+  if(data.some(x=>x.lr.toLowerCase()===v.lr.toLowerCase())){alert("LR Number already exists. Use Update LR to edit it.");return;}
+  data.push(v); save(); clearForm(); alert("LR saved successfully.");
+}
+function updateLR(){
+  const v=values(); const key=editingLR || v.lr;
+  const i=data.findIndex(x=>x.lr===key);
+  if(i<0){alert("Select an LR from the table first.");return;}
+  if(!v.lr || !v.transport || !v.articles){alert("Please complete the required fields.");return;}
+  data[i]=v; save(); editingLR=null; clearForm(); alert("LR updated successfully.");
+}
+function editLR(i){
+  const v=data[i]; editingLR=v.lr;
+  $("lr").value=v.lr;$("transport").value=v.transport;$("articles").value=v.articles;
+  $("freight").value=v.freight;$("local").value=v.local;$("booking").value=v.booking;
+  $("delivery").value=v.delivery||"";$("status").value=v.status;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function deleteLR(i){if(confirm("Delete this LR entry?")){data.splice(i,1);save();}}
+function deleteCurrent(){if(!editingLR){alert("Select an LR from the table first.");return;} const i=data.findIndex(x=>x.lr===editingLR); if(i>=0){deleteLR(i);clearForm();editingLR=null;}}
+function clearForm(){["lr","transport","articles"].forEach(id=>$(id).value="");$("freight").value=0;$("local").value=0;$("booking").value=today();$("delivery").value="";$("status").value="Pending";editingLR=null;}
+function money(n){return "₹"+Number(n).toLocaleString("en-IN",{minimumFractionDigits:2});}
+function render(){
+  $("total").textContent=data.length;
+  $("pendingCount").textContent=data.filter(x=>x.status==="Pending").length;
+  const rows=$("rows");
+  if(!data.length){rows.innerHTML='<tr><td colspan="10" class="empty">No parcel entries yet</td></tr>';return;}
+  rows.innerHTML=data.map((x,i)=>`<tr>
+    <td><b>${esc(x.lr)}</b></td><td>${esc(x.transport)}</td><td>${x.articles}</td>
+    <td>${money(x.freight)}</td><td>${money(x.local)}</td><td><b>${money(x.freight+x.local)}</b></td>
+    <td>${x.booking||""}</td><td>${x.delivery||""}</td><td>${esc(x.status)}</td>
+    <td class="actions"><button class="edit" onclick="editLR(${i})">Edit</button><button class="del" onclick="deleteLR(${i})">Delete</button></td>
+  </tr>`).join("");
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+render();
+</script>
+</body>
+</html>
